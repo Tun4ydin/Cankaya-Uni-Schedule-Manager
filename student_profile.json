@@ -1,7 +1,7 @@
 {
   "primary_dept": "CENG",
-  "secondary_type": "YOK",
-  "secondary_dept": "PHYS",
+  "secondary_type": "YANDAL",
+  "secondary_dept": "PSY",
   "custom_overrides": {
     "PHYS131": "ZORUNLU",
     "CENG329": "SECMELI",
