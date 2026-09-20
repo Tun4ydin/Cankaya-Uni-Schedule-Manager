@@ -52,10 +52,48 @@ class SchedulerEngine:
         return False, None
 
     @staticmethod
-    def find_all_conflicts(sections_list):
+    def slot_overlaps_custom_block(slot, block):
+        """Checks if a course slot overlaps with a student's custom block."""
+        if slot.day != block.get("day"):
+            return False
+        b_slot = block.get("time_slot", "")
+        if slot.time_slot == b_slot:
+            return True
+
+        t1_start, t1_end = SchedulerEngine.parse_time_range(slot.time_slot)
+        t2_start, t2_end = SchedulerEngine.parse_time_range(b_slot)
+
+        if t1_start is not None and t2_start is not None:
+            return max(t1_start, t2_start) < min(t1_end, t2_end)
+
+        # Fallback: check if start hour matches (e.g. "10:00")
+        s1 = slot.time_slot.strip()[:5]
+        s2 = b_slot.strip()[:5]
+        if s1 and s2 and s1 == s2:
+            return True
+
+        return False
+
+    @staticmethod
+    def section_overlaps_custom_blocks(sec, custom_blocks):
         """
-        Takes a list of Section objects and returns all conflicting slot details.
-        Returns dict of format: { (day, time_slot): [list of conflicting Section objects] }
+        Checks if a section has any slot overlapping with any custom schedule block.
+        Returns: (bool, (slot, block) or None)
+        """
+        if not custom_blocks:
+            return False, None
+        for slot in sec.slots:
+            for block in custom_blocks.values():
+                if SchedulerEngine.slot_overlaps_custom_block(slot, block):
+                    return True, (slot, block)
+        return False, None
+
+    @staticmethod
+    def find_all_conflicts(sections_list, custom_blocks=None):
+        """
+        Takes a list of Section objects and optional custom_blocks dict.
+        Returns all conflicting slot details.
+        Returns dict of format: { (day, time_slot): { "sections": [...], "custom_block": block_or_None } }
         """
         slot_map = {}
         for sec in sections_list:
@@ -68,16 +106,37 @@ class SchedulerEngine:
         conflicts = {}
         for key, sec_list in slot_map.items():
             distinct_courses = set(sec.course_code for sec in sec_list)
-            if len(distinct_courses) > 1:
-                conflicts[key] = sec_list
+            day, time_str = key
+            
+            # Check if this slot also collides with a custom block
+            block_clash = None
+            if custom_blocks:
+                for block in custom_blocks.values():
+                    if block.get("day") == day:
+                        t1_start, t1_end = SchedulerEngine.parse_time_range(time_str)
+                        t2_start, t2_end = SchedulerEngine.parse_time_range(block.get("time_slot", ""))
+                        if t1_start is not None and t2_start is not None:
+                            if max(t1_start, t2_start) < min(t1_end, t2_end):
+                                block_clash = block
+                                break
+                        elif time_str == block.get("time_slot", ""):
+                            block_clash = block
+                            break
+
+            if len(distinct_courses) > 1 or block_clash is not None:
+                conflicts[key] = {
+                    "sections": sec_list,
+                    "custom_block": block_clash
+                }
 
         return conflicts
 
-    def generate_combinations(self, course_sections_dict, preferences=None):
+    def generate_combinations(self, course_sections_dict, preferences=None, custom_blocks=None):
         """
         Generates valid non-conflicting section combinations.
         course_sections_dict: { "CENG111": [Section1, Section2, ...], "MATH119": [...] }
         preferences: dict e.g. {"free_friday": True, "no_morning": False}
+        custom_blocks: dict of user-defined schedule blocks e.g. { "Pazartesi:10:00 - 10:50": {...} }
         
         Returns: list of combinations. Each combination is a list of Section objects.
         """
@@ -85,8 +144,27 @@ class SchedulerEngine:
         if not course_codes:
             return []
 
-        # List of lists of candidate sections per course
-        sections_per_course = [course_sections_dict[code] for code in course_codes if course_sections_dict[code]]
+        # List of lists of candidate sections per course, pruning any section that conflicts with custom blocks
+        sections_per_course = []
+        for code in course_codes:
+            secs = course_sections_dict.get(code, [])
+            if not secs:
+                continue
+
+            if custom_blocks:
+                valid_secs = [
+                    sec for sec in secs
+                    if not self.section_overlaps_custom_blocks(sec, custom_blocks)[0]
+                ]
+                # If ALL sections of this course conflict with custom blocks, no valid combination is possible
+                if not valid_secs:
+                    return []
+                sections_per_course.append(valid_secs)
+            else:
+                sections_per_course.append(list(secs))
+
+        if not sections_per_course:
+            return []
 
         valid_combinations = []
 

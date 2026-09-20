@@ -1,7 +1,7 @@
 {
   "primary_dept": "CENG",
   "secondary_type": "YOK",
-  "secondary_dept": "PHYS",
+  "secondary_dept": "YOK",
   "custom_overrides": {
     "PHYS131": "ZORUNLU",
     "CENG329": "SECMELI",
@@ -9,5 +9,142 @@
   },
   "custom_credits": {},
   "theme": "modern",
-  "custom_schedule_blocks": {}
+  "custom_schedule_blocks": {},
+  "passed_courses": {
+    "ENG121": {
+      "code": "ENG121",
+      "grade": "AA",
+      "name": "English for Academic Purposes I"
+    },
+    "ENG122": {
+      "code": "ENG122",
+      "grade": "AA",
+      "name": "English for Academic Purposes II"
+    },
+    "BIO101": {
+      "code": "BIO101",
+      "grade": "AA",
+      "name": "BIO101 - Biyoloji"
+    },
+    "CENG105": {
+      "code": "CENG105",
+      "grade": "AA",
+      "name": "Introduction to Computers and Programming"
+    },
+    "CENG111": {
+      "code": "CENG111",
+      "grade": "CB",
+      "name": "Introduction to Computer Engineering Concepts"
+    },
+    "ESR103": {
+      "code": "ESR103",
+      "grade": "AA",
+      "name": "ESR103 - ESR Bölümü"
+    },
+    "HIST201": {
+      "code": "HIST201",
+      "grade": "AA",
+      "name": "Atatürk İlkeleri ve İnkılap Tarihi I"
+    },
+    "HIST202": {
+      "code": "HIST202",
+      "grade": "AA",
+      "name": "Atatürk İlkeleri ve İnkılap Tarihi II"
+    },
+    "MATH157": {
+      "code": "MATH157",
+      "grade": "AA",
+      "name": "Calculus I / Genel Matematik I"
+    },
+    "PHYS131": {
+      "code": "PHYS131",
+      "grade": "BB",
+      "name": "General Physics I / Genel Fizik I"
+    },
+    "TURK101": {
+      "code": "TURK101",
+      "grade": "BA",
+      "name": "Türk Dili I / Turkish Language I"
+    },
+    "CENG114": {
+      "code": "CENG114",
+      "grade": "BA",
+      "name": "CENG114 - Bilgisayar Mühendisliği (Computer Engineering)"
+    },
+    "CENG124": {
+      "code": "CENG124",
+      "grade": "AA",
+      "name": "CENG124 - Bilgisayar Mühendisliği (Computer Engineering)"
+    },
+    "MATH158": {
+      "code": "MATH158",
+      "grade": "CC",
+      "name": "Calculus II / Genel Matematik II"
+    },
+    "PHYS132": {
+      "code": "PHYS132",
+      "grade": "BA",
+      "name": "General Physics II / Genel Fizik II"
+    },
+    "TURK102": {
+      "code": "TURK102",
+      "grade": "AA",
+      "name": "Türk Dili II / Turkish Language II"
+    },
+    "CENG235": {
+      "code": "CENG235",
+      "grade": "BB",
+      "name": "Logic Design / Mantık Tasarımı"
+    },
+    "CENG241": {
+      "code": "CENG241",
+      "grade": "BA",
+      "name": "Data Structures / Veri Yapıları"
+    },
+    "EE205": {
+      "code": "EE205",
+      "grade": "CC",
+      "name": "Circuit Theory II / Devre Teorisi II"
+    },
+    "EE213": {
+      "code": "EE213",
+      "grade": "BB",
+      "name": "EE213 - Elektrik-Elektronik Mühendisliği (Electrical & Electronics)"
+    },
+    "MATH254": {
+      "code": "MATH254",
+      "grade": "BA",
+      "name": "MATH254 - Matematik (Mathematics)"
+    },
+    "ALM101": {
+      "code": "ALM101",
+      "grade": "BA",
+      "name": "ALM101 - ALM Bölümü"
+    },
+    "CENG218": {
+      "code": "CENG218",
+      "grade": "AA",
+      "name": "CENG218 - Bilgisayar Mühendisliği (Computer Engineering)"
+    },
+    "CENG222": {
+      "code": "CENG222",
+      "grade": "CB",
+      "name": "CENG222 - Bilgisayar Mühendisliği (Computer Engineering)"
+    },
+    "CENG236": {
+      "code": "CENG236",
+      "grade": "BA",
+      "name": "CENG236 - Bilgisayar Mühendisliği (Computer Engineering)"
+    },
+    "INTT104": {
+      "code": "INTT104",
+      "grade": "AA",
+      "name": "INTT104 - Uluslararası Ticaret ve Finansman"
+    },
+    "MATH205": {
+      "code": "MATH205",
+      "grade": "DD",
+      "name": "Differential Equations / Diferansiyel Denklemler"
+    }
+  }
 }

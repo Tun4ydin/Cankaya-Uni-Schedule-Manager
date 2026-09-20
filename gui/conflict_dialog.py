@@ -11,11 +11,13 @@ class ConflictDetailDialog(QDialog):
     (course info, syllabus description, official course web page links,
     section schedules, instructors, classrooms, and conflicts).
     """
-    def __init__(self, day_name, time_slot, entries, data_manager=None, parent=None):
+    def __init__(self, day_name, time_slot, entries, custom_block=None, data_manager=None, parent=None):
         super().__init__(parent)
         self.day_name = day_name
         self.time_slot = time_slot
         self.entries = entries  # List of (Section, ScheduleSlot)
+        self.custom_block = custom_block  # User's custom block dict if any
+        self.custom_block_modified = False
         self.data_manager = data_manager
         self.init_ui()
 
@@ -35,18 +37,41 @@ class ConflictDetailDialog(QDialog):
                     entries.append((sec, slot))
             else:
                 entries.append((sec, None))
-        dlg = cls("Ders Kataloğu", norm, entries, data_manager=data_manager, parent=parent)
+        dlg = cls("Ders Kataloğu", norm, entries, custom_block=None, data_manager=data_manager, parent=parent)
         if hasattr(dlg, 'exec'):
             dlg.exec()
         else:
             dlg.exec_()
 
+    def edit_custom_block(self):
+        from gui.custom_block_dialog import CustomBlockEditDialog
+        dlg = CustomBlockEditDialog(self.day_name, self.time_slot, current_block=self.custom_block, parent=self)
+        if dlg.exec():
+            if getattr(dlg, 'deleted', False) and self.data_manager:
+                self.data_manager.delete_custom_schedule_block(self.day_name, self.time_slot)
+                self.custom_block_modified = True
+                self.accept()
+            elif dlg.result_data and self.data_manager:
+                if dlg.result_data.get("all_weekdays"):
+                    for d in ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]:
+                        self.data_manager.set_custom_schedule_block(
+                            d, self.time_slot, dlg.result_data["title"], dlg.result_data.get("note", ""), dlg.result_data.get("color", "amber")
+                        )
+                else:
+                    self.data_manager.set_custom_schedule_block(
+                        self.day_name, self.time_slot, dlg.result_data["title"], dlg.result_data.get("note", ""), dlg.result_data.get("color", "amber")
+                    )
+                self.custom_block_modified = True
+                self.accept()
+
     def init_ui(self):
         distinct_codes = sorted(list(set(sec.course_code for sec, _ in self.entries)))
-        is_conflict = len(distinct_codes) > 1
+        is_conflict = len(distinct_codes) > 1 or (self.custom_block is not None and len(self.entries) > 0)
         is_dark = StyleManager.get_active_theme() == "modern"
 
-        if is_conflict:
+        if self.custom_block is not None and len(self.entries) > 0:
+            self.setWindowTitle(f"⚠️ Ders & Etkinlik Çakışması - {self.day_name} {self.time_slot}")
+        elif is_conflict:
             self.setWindowTitle(f"⚠️ Ders Çakışma Detayları - {self.day_name} {self.time_slot}")
         else:
             course_title = distinct_codes[0] if distinct_codes else ""
@@ -99,7 +124,15 @@ class ConflictDetailDialog(QDialog):
         h_layout.setContentsMargins(10, 8, 10, 8)
         h_layout.setSpacing(3)
 
-        if is_conflict:
+        if self.custom_block is not None and len(self.entries) > 0:
+            lbl_title = QLabel(f"⚠️ <b>DERS VE KİŞİSEL ETKİNLİK ÇAKIŞMASI TESPİT EDİLDİ</b>")
+            lbl_title.setStyleSheet(f"color: {conf_text}; font-size: 14px;")
+            lbl_desc = QLabel(
+                f"<b>{self.day_name}</b> günü <b>{self.time_slot}</b> saatinde "
+                f"eklediğiniz <b>{self.custom_block['title']}</b> etkinliği ile ders aynı saate denk gelmektedir."
+            )
+            lbl_desc.setStyleSheet(f"color: {'#cdd6f4' if is_dark else '#334155'}; font-size: 12px;")
+        elif is_conflict:
             lbl_title = QLabel(f"⚠️ <b>DERS ÇAKIŞMASI TESPİT EDİLDİ</b>")
             lbl_title.setStyleSheet(f"color: {conf_text}; font-size: 14px;")
             lbl_desc = QLabel(
@@ -119,7 +152,7 @@ class ConflictDetailDialog(QDialog):
         h_layout.addWidget(lbl_desc)
         main_layout.addWidget(header_frame)
 
-        # Scrollable area for course cards
+        # Scrollable area for cards
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll_bg = "#181825" if is_dark else "#f1f5f9"
@@ -137,7 +170,60 @@ class ConflictDetailDialog(QDialog):
         cards_layout.setContentsMargins(10, 10, 10, 10)
         cards_layout.setSpacing(12)
 
-        # Group entries by course
+        # 1. If custom block is present, render it first
+        if self.custom_block:
+            block_card = QFrame()
+            cb_color = self.custom_block.get("color", "amber")
+            bg_hex, border_hex, text_hex = StyleManager.get_custom_block_style(cb_color)
+            block_card.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {bg_hex};
+                    border: 2px solid {border_hex};
+                    border-radius: 8px;
+                    padding: 8px;
+                }}
+            """)
+            b_layout = QVBoxLayout(block_card)
+            b_layout.setSpacing(6)
+
+            b_top = QHBoxLayout()
+            lbl_b_title = QLabel(f"📌 <b>Kişisel Etkinliğiniz: {self.custom_block['title']}</b>")
+            lbl_b_title.setStyleSheet(f"color: {text_hex}; font-size: 13px; font-weight: bold; border: none; background: transparent;")
+            b_top.addWidget(lbl_b_title, 1)
+
+            btn_edit_block = QPushButton("✏️ Etkinliği Düzenle / Sil")
+            btn_edit_block.setCursor(POINTING_HAND_CURSOR)
+            btn_edit_block.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {'#313244' if is_dark else '#ffffff'};
+                    color: {'#cdd6f4' if is_dark else '#0f172a'};
+                    border: 1px solid {border_hex};
+                    border-radius: 4px;
+                    padding: 4px 10px;
+                    font-size: 11px;
+                    font-weight: bold;
+                }}
+                QPushButton:hover {{
+                    background-color: {border_hex};
+                    color: #ffffff;
+                }}
+            """)
+            btn_edit_block.clicked.connect(self.edit_custom_block)
+            b_top.addWidget(btn_edit_block)
+            b_layout.addLayout(b_top)
+
+            if self.custom_block.get("note"):
+                lbl_b_note = QLabel(f"📝 <b>Not:</b> {self.custom_block['note']}")
+                lbl_b_note.setStyleSheet(f"color: {text_hex}; font-size: 11px; border: none; background: transparent;")
+                b_layout.addWidget(lbl_b_note)
+
+            lbl_b_time = QLabel(f"⏰ <b>Zaman:</b> {self.day_name} {self.time_slot}")
+            lbl_b_time.setStyleSheet(f"color: {text_hex}; font-size: 11px; border: none; background: transparent;")
+            b_layout.addWidget(lbl_b_time)
+
+            cards_layout.addWidget(block_card)
+
+        # 2. Group entries by course
         courses_map = {}
         for sec, slot in self.entries:
             courses_map.setdefault(sec.course_code, []).append((sec, slot))
@@ -239,6 +325,24 @@ class ConflictDetailDialog(QDialog):
             lbl_desc.setStyleSheet(f"color: {desc_color}; font-size: 11px; line-height: 1.4;")
             lbl_desc.setWordWrap(True)
             info_layout.addWidget(lbl_desc)
+
+            # Prerequisite Status
+            if self.data_manager:
+                prereq = self.data_manager.check_course_prerequisites(c_code)
+                if prereq.get("already_passed"):
+                    prereq_text = "🎓 <b>Ön Koşul / Durum:</b> <span style='color: #10b981; font-weight: bold;'>Bu dersi daha önce başarıyla verdiniz.</span>"
+                elif prereq.get("can_take"):
+                    if prereq.get("has_prereqs"):
+                        prereq_text = f"✅ <b>Ön Koşul Durumu:</b> <span style='color: #10b981; font-weight: bold;'>Sağlandı</span> <span style='color: {'#a6adc8' if is_dark else '#475569'};'>({prereq['rule_description']})</span>"
+                    else:
+                        prereq_text = f"ℹ️ <b>Ön Koşul Durumu:</b> <span style='color: {'#9399b2' if is_dark else '#64748b'};'>Ön koşulsuz ders</span>"
+                else:
+                    prereq_text = f"❌ <b>Ön Koşul Durumu:</b> <span style='color: #ef4444; font-weight: bold;'>SAĞLANMADI!</span> <span style='color: {'#f38ba8' if is_dark else '#b91c1c'};'>({prereq['message']})</span>"
+
+                lbl_prereq = QLabel(prereq_text)
+                lbl_prereq.setStyleSheet("font-size: 11px; margin-top: 2px;")
+                lbl_prereq.setWordWrap(True)
+                info_layout.addWidget(lbl_prereq)
 
             card_layout.addWidget(info_box)
 

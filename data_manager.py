@@ -902,6 +902,50 @@ class DataManager:
             del blocks[key]
             self.save_student_profile()
 
+    def get_passed_courses(self):
+        """Returns dictionary of passed courses: {code: {'grade': ..., 'name': ...}}."""
+        return self.student_profile.setdefault("passed_courses", {})
+
+    def set_passed_courses(self, passed_dict):
+        """Sets the dictionary of passed courses and saves profile."""
+        clean_dict = {}
+        for code, info in passed_dict.items():
+            norm = self.normalize_code(code)
+            if isinstance(info, dict):
+                clean_dict[norm] = info
+            elif isinstance(info, str):
+                clean_dict[norm] = {"code": norm, "grade": info, "name": norm}
+            else:
+                clean_dict[norm] = {"code": norm, "grade": "CC", "name": norm}
+        self.student_profile["passed_courses"] = clean_dict
+        self.save_student_profile()
+
+    def add_passed_course(self, course_code, grade="CC", name=""):
+        norm = self.normalize_code(course_code)
+        passed = self.get_passed_courses()
+        passed[norm] = {
+            "code": norm,
+            "grade": grade.upper(),
+            "name": name or norm
+        }
+        self.save_student_profile()
+
+    def remove_passed_course(self, course_code):
+        norm = self.normalize_code(course_code)
+        passed = self.get_passed_courses()
+        if norm in passed:
+            del passed[norm]
+            self.save_student_profile()
+
+    def is_course_passed(self, course_code):
+        norm = self.normalize_code(course_code)
+        return norm in self.get_passed_courses()
+
+    def check_course_prerequisites(self, course_code):
+        from prerequisite_manager import PrerequisiteManager
+        passed = self.get_passed_courses()
+        return PrerequisiteManager.check_prerequisites(course_code, passed)
+
     def toggle_custom_course_type(self, course_code):
         """Toggles user custom override for a course between ZORUNLU and SECMELI."""
         norm = self.normalize_code(course_code)

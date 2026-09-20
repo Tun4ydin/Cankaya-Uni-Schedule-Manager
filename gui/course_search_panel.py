@@ -173,6 +173,20 @@ class CourseSearchPanel(QWidget):
         self.txt_search.textChanged.connect(self.on_search_changed)
         search_layout.addWidget(self.txt_search)
 
+        # Prerequisite Filters
+        prereq_filter_layout = QHBoxLayout()
+        self.chk_only_eligible = QCheckBox("🟢 Sadece Alabileceğim")
+        self.chk_only_eligible.setToolTip("Yalnızca ön koşullarını sağladığınız dersleri listeler")
+        self.chk_only_eligible.stateChanged.connect(self.on_search_changed)
+
+        self.chk_hide_passed = QCheckBox("🎓 Verdiğim Dersleri Gizle")
+        self.chk_hide_passed.setToolTip("Transkriptinizde daha önce başarıyla verdiğiniz dersleri arama listesinden gizler")
+        self.chk_hide_passed.stateChanged.connect(self.on_search_changed)
+
+        prereq_filter_layout.addWidget(self.chk_only_eligible)
+        prereq_filter_layout.addWidget(self.chk_hide_passed)
+        search_layout.addLayout(prereq_filter_layout)
+
         # Search Results List
         self.list_results = QListWidget()
         self.list_results.setSelectionMode(SINGLE_SELECTION)
@@ -376,15 +390,56 @@ class CourseSearchPanel(QWidget):
         self.list_results.clear()
         is_cankaya = StyleManager.get_active_theme() == "cankaya"
 
-        for course, c_type, type_label in results[:80]:
+        only_eligible = hasattr(self, 'chk_only_eligible') and self.chk_only_eligible.isChecked()
+        hide_passed = hasattr(self, 'chk_hide_passed') and self.chk_hide_passed.isChecked()
+
+        for course, c_type, type_label in results:
+            prereq_info = self.data_manager.check_course_prerequisites(course.code)
+            already_passed = prereq_info.get("already_passed", False)
+            can_take = prereq_info.get("can_take", True)
+            has_prereqs = prereq_info.get("has_prereqs", False)
+
+            if hide_passed and already_passed:
+                continue
+            if only_eligible and not can_take:
+                continue
+
             sec_count = len(course.sections)
             cr, ec = self.data_manager.get_course_credits(course.code)
-            display_text = f"[{course.code}]  {type_label}  |  {cr} Kr / {ec} AKTS  ({sec_count} Sec)"
+
+            if already_passed:
+                status_tag = "🎓 Verildi"
+            elif not can_take:
+                status_tag = "🔒 Ön Koşul Eksik"
+            elif has_prereqs:
+                status_tag = "🟢 Alınabilir"
+            else:
+                status_tag = ""
+
+            status_str = f"  {status_tag}" if status_tag else ""
+            display_text = f"[{course.code}]{status_str}  {type_label}  |  {cr} Kr / {ec} AKTS  ({sec_count} Sec)"
             item = QListWidgetItem(display_text)
             item.setData(USER_ROLE, course.code)
 
+            # Prerequisite Tooltip
+            tooltip_lines = [f"📚 {course.code} ({sec_count} Şube)"]
+            if already_passed:
+                tooltip_lines.append("🎓 Bu dersi daha önce başarıyla verdiniz.")
+            elif not can_take:
+                tooltip_lines.append(f"🔒 Ön Koşul Eksik: {prereq_info['rule_description']}")
+                tooltip_lines.append(f"⚠️ {prereq_info['message']}")
+            elif has_prereqs:
+                tooltip_lines.append(f"🟢 Ön Koşul Sağlandı: {prereq_info['rule_description']}")
+            else:
+                tooltip_lines.append("ℹ️ Ön koşulsuz ders.")
+            item.setToolTip("\n".join(tooltip_lines))
+
             # Visual color hinting
-            if is_cankaya:
+            if not can_take and not already_passed:
+                item.setForeground(QColor("#ef4444" if is_cankaya else "#f38ba8"))
+            elif already_passed:
+                item.setForeground(QColor("#15803d" if is_cankaya else "#a6e3a1"))
+            elif is_cankaya:
                 if c_type == "ZORUNLU":
                     item.setForeground(QColor("#002855"))
                 elif c_type == "ZORUNLU_CAP":
@@ -402,6 +457,8 @@ class CourseSearchPanel(QWidget):
                     item.setForeground(QColor("#89dceb"))
 
             self.list_results.addItem(item)
+            if self.list_results.count() >= 90:
+                break
 
     def add_selected_course_to_basket(self):
         item = self.list_results.currentItem()
@@ -414,6 +471,22 @@ class CourseSearchPanel(QWidget):
 
         if c_code in self.basket_courses:
             return
+
+        # Prerequisite warning check
+        prereq_info = self.data_manager.check_course_prerequisites(c_code)
+        if not prereq_info.get("can_take", True):
+            res = QMessageBox.warning(
+                self,
+                "⚠️ Ön Koşul Uyarısı",
+                f"<b>{c_code}</b> dersinin ön koşulları transkriptinizde eksik görünüyor!\n\n"
+                f"• Gereken Ön Koşul: <b>{prereq_info['rule_description']}</b>\n"
+                f"• Durum: {prereq_info['message']}\n\n"
+                f"Yine de bu dersi sepetinize eklemek istiyor musunuz?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            if res != QMessageBox.StandardButton.Yes:
+                return
 
         course = self.data_manager.courses[c_code]
         all_sec_nos = set(course.sections.keys())

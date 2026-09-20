@@ -18,7 +18,7 @@ try:
         QLabel, QSplitter, QMessageBox, QProgressDialog, QFileDialog, QFrame,
         QLineEdit, QComboBox, QListWidget, QListWidgetItem, QGroupBox, QTreeWidget,
         QTreeWidgetItem, QAbstractItemView, QCheckBox, QTableWidget, QTableWidgetItem,
-        QHeaderView, QMenu, QDialog, QScrollArea
+        QHeaderView, QMenu, QDialog, QScrollArea, QTextEdit, QCompleter
     )
     from PySide6.QtCore import Qt, QThread, Signal as pyqtSignal
     from PySide6.QtGui import QColor, QFont, QBrush, QPixmap, QIcon
@@ -31,7 +31,7 @@ except ImportError:
             QLabel, QSplitter, QMessageBox, QProgressDialog, QFileDialog, QFrame,
             QLineEdit, QComboBox, QListWidget, QListWidgetItem, QGroupBox, QTreeWidget,
             QTreeWidgetItem, QAbstractItemView, QCheckBox, QTableWidget, QTableWidgetItem,
-            QHeaderView, QMenu, QDialog, QScrollArea
+            QHeaderView, QMenu, QDialog, QScrollArea, QTextEdit, QCompleter
         )
         from PyQt6.QtCore import Qt, QThread, pyqtSignal
         from PyQt6.QtGui import QColor, QFont, QBrush, QPixmap, QIcon
@@ -43,7 +43,7 @@ except ImportError:
             QLabel, QSplitter, QMessageBox, QProgressDialog, QFileDialog, QFrame,
             QLineEdit, QComboBox, QListWidget, QListWidgetItem, QGroupBox, QTreeWidget,
             QTreeWidgetItem, QAbstractItemView, QCheckBox, QTableWidget, QTableWidgetItem,
-            QHeaderView, QMenu, QDialog, QScrollArea
+            QHeaderView, QMenu, QDialog, QScrollArea, QTextEdit, QCompleter
         )
         from PyQt5.QtCore import Qt, QThread, pyqtSignal
         from PyQt5.QtGui import QColor, QFont, QBrush, QPixmap, QIcon
@@ -70,6 +70,8 @@ if QT_BINDING in ("PySide6", "PyQt6"):
     VERTICAL = Qt.Orientation.Vertical
     CUSTOM_CONTEXT_MENU = Qt.ContextMenuPolicy.CustomContextMenu
     POINTING_HAND_CURSOR = Qt.CursorShape.PointingHandCursor
+    CASE_INSENSITIVE = Qt.CaseSensitivity.CaseInsensitive
+    MATCH_CONTAINS = Qt.MatchFlag.MatchContains
 else:
     ALIGN_CENTER = Qt.AlignCenter
     ALIGN_LEFT = Qt.AlignLeft
@@ -90,3 +92,5 @@ else:
     VERTICAL = Qt.Vertical
     CUSTOM_CONTEXT_MENU = Qt.CustomContextMenu
     POINTING_HAND_CURSOR = Qt.PointingHandCursor
+    CASE_INSENSITIVE = Qt.CaseInsensitive
+    MATCH_CONTAINS = Qt.MatchContains

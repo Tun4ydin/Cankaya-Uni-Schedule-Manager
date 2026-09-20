@@ -125,6 +125,11 @@ class MainWindow(QMainWindow):
         self.btn_theme.clicked.connect(self.toggle_theme)
         header_layout.addWidget(self.btn_theme)
 
+        self.btn_transcript = QPushButton("📜 Transkript & Ön Koşul")
+        self.btn_transcript.setToolTip("Transkriptinizi yükleyerek verdiğiniz dersleri kaydedin ve derslerin ön koşullarını denetleyin")
+        self.btn_transcript.clicked.connect(self.open_transcript_dialog)
+        header_layout.addWidget(self.btn_transcript)
+
         self.btn_refresh = QPushButton("🔄 Verileri Çek")
         self.btn_refresh.setToolTip("Çankaya web sitesinden güncel ders programlarını çeker")
         self.btn_refresh.clicked.connect(self.start_web_scraping)
@@ -164,6 +169,7 @@ class MainWindow(QMainWindow):
 
         # Timetable Grid
         self.timetable_widget = TimetableWidget(data_manager=self.data_manager)
+        self.timetable_widget.custom_blocks_changed.connect(self.on_custom_blocks_updated)
         right_layout.addWidget(self.timetable_widget)
 
         splitter.addWidget(right_container)
@@ -246,11 +252,62 @@ class MainWindow(QMainWindow):
 
         self.timetable_widget.display_schedule(all_manual_sections)
 
-    def generate_schedule_combinations(self):
+    def on_custom_blocks_updated(self):
+        """Called whenever the student adds, edits, or removes a custom schedule block."""
+        if self.current_combinations:
+            # Re-generate schedule combinations with the new custom blocks
+            self.generate_schedule_combinations(silent=True)
+        else:
+            self.on_basket_courses_changed()
+
+    def open_transcript_dialog(self):
+        from gui.transcript_dialog import TranscriptDialog
+        dlg = TranscriptDialog(self.data_manager, parent=self)
+        dlg.transcript_updated.connect(self.on_transcript_updated)
+        if hasattr(dlg, 'exec'):
+            dlg.exec()
+        else:
+            dlg.exec_()
+
+    def on_transcript_updated(self):
+        self.search_panel.populate_departments()
+        self.search_panel.on_search_changed()
+        self.search_panel.update_basket_tree()
+        if self.current_combinations:
+            self.generate_schedule_combinations(silent=True)
+        else:
+            self.on_basket_courses_changed()
+
+    def generate_schedule_combinations(self, silent=False):
         target_dict = self.search_panel.get_selected_target_dict()
         if not target_dict:
-            QMessageBox.warning(self, "Ders Seçilmedi", "Lütfen önce sol panelden alınmak istenen dersleri sepete ekleyin.")
+            if not silent:
+                QMessageBox.warning(self, "Ders Seçilmedi", "Lütfen önce sol panelden alınmak istenen dersleri sepete ekleyin.")
             return
+
+        # Check prerequisites for selected courses
+        if not silent:
+            missing_prereqs = []
+            for c_code in target_dict.keys():
+                p_info = self.data_manager.check_course_prerequisites(c_code)
+                if not p_info.get("can_take", True):
+                    missing_prereqs.append(f"• <b>{c_code}</b>: {p_info['message']}")
+
+            if missing_prereqs:
+                warning_text = (
+                    "Sepetinizdeki bazı derslerin ön koşulları transkriptinizde eksik görünmektedir:\n\n" +
+                    "\n".join(missing_prereqs) +
+                    "\n\nYine de bu dersler için program oluşturmak istiyor musunuz?"
+                )
+                res = QMessageBox.question(
+                    self,
+                    "⚠️ Ön Koşul Eksik Uyarısı",
+                    warning_text,
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                if res != QMessageBox.StandardButton.Yes:
+                    return
 
         prefs = {
             "no_morning": self.combination_bar.chk_no_morning.isChecked(),
@@ -258,20 +315,40 @@ class MainWindow(QMainWindow):
             "free_monday": self.combination_bar.chk_free_monday.isChecked(),
         }
 
-        self.current_combinations = self.scheduler_engine.generate_combinations(target_dict, preferences=prefs)
+        custom_blocks = self.data_manager.get_custom_schedule_blocks() if self.data_manager else {}
+        self.current_combinations = self.scheduler_engine.generate_combinations(
+            target_dict, preferences=prefs, custom_blocks=custom_blocks
+        )
         count = len(self.current_combinations)
         self.combination_bar.set_combinations_count(count)
 
         if count > 0:
             self.display_combination_by_index(0)
-            QMessageBox.information(self, "Kombinasyon Üretildi", f"Çakışma oluşturmayan toplam {count} adet ders programı kombinasyonu bulundu!")
+            if not silent:
+                QMessageBox.information(self, "Kombinasyon Üretildi", f"Çakışma oluşturmayan toplam {count} adet ders programı kombinasyonu bulundu!")
         else:
             self.timetable_widget.clear_schedule()
-            QMessageBox.warning(
-                self,
-                "Çakışmasız Program Bulunamadı",
-                "Seçtiğiniz dersler/section'lar arasında çakışma oluşturmayan bir kombinasyon bulunamadı.\nLütfen farklı section'lar seçmeyi veya filtreleri esnetmeyi deneyin."
-            )
+            if not silent:
+                # Check if custom blocks caused conflicts for any selected courses
+                custom_block_clash_courses = []
+                if custom_blocks:
+                    for c_code, sec_list in target_dict.items():
+                        if sec_list and all(self.scheduler_engine.section_overlaps_custom_blocks(s, custom_blocks)[0] for s in sec_list):
+                            custom_block_clash_courses.append(c_code)
+
+                if custom_block_clash_courses:
+                    clash_info = ", ".join(custom_block_clash_courses)
+                    msg = (
+                        f"Seçtiğiniz derslerden bazılarının tüm şubeleri eklediğiniz kişisel etkinliklerle çakışmaktadır:\n\n"
+                        f"👉 Çakışan dersler: {clash_info}\n\n"
+                        f"Lütfen tablodaki ilgili saatlerdeki kişisel etkinliğinizi düzenlemeyi/kaldırmayı veya farklı dersler seçmeyi deneyin."
+                    )
+                else:
+                    msg = (
+                        "Seçtiğiniz dersler/section'lar veya kişisel etkinlikler arasında çakışma oluşturmayan bir kombinasyon bulunamadı.\n"
+                        "Lütfen farklı section'lar seçmeyi, kişisel etkinliklerinizi düzenlemeyi veya filtreleri esnetmeyi deneyin."
+                    )
+                QMessageBox.warning(self, "Çakışmasız Program Bulunamadı", msg)
 
     def on_preferences_changed(self, prefs):
         target_dict = self.search_panel.get_selected_target_dict()
