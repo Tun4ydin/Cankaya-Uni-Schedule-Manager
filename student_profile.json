@@ -1,0 +1,13 @@
+{
+  "primary_dept": "CENG",
+  "secondary_type": "YOK",
+  "secondary_dept": "PHYS",
+  "custom_overrides": {
+    "PHYS131": "ZORUNLU",
+    "CENG329": "SECMELI",
+    "CENG403": "SECMELI"
+  },
+  "custom_credits": {},
+  "theme": "modern",
+  "custom_schedule_blocks": {}
+}
