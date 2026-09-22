@@ -86,6 +86,14 @@ class CombinationBar(QFrame):
         self.current_index = 0 if count > 0 else -1
         self.update_controls()
 
+    def set_custom_status(self, text):
+        self.total_combinations = 0
+        self.current_index = -1
+        self.lbl_status.setText(text)
+        self.btn_prev.setEnabled(False)
+        self.btn_next.setEnabled(False)
+        self.lbl_credit_summary.setText("")
+
     def update_controls(self):
         if self.total_combinations > 0:
             self.lbl_status.setText(f"Kombinasyon: {self.current_index + 1} / {self.total_combinations}")

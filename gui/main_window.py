@@ -15,6 +15,7 @@ from gui.styles import StyleManager, ModernStyle, CankayaStyle
 from gui.timetable_widget import TimetableWidget
 from gui.course_search_panel import CourseSearchPanel
 from gui.combination_bar import CombinationBar
+from logger import AppLog
 
 
 class ScraperThread(QThread):
@@ -125,6 +126,7 @@ class MainWindow(QMainWindow):
         self.data_manager = DataManager()
         self.scheduler_engine = SchedulerEngine()
         self.current_combinations = []
+        self.has_generated_schedule = False
         self.scraper_thread = None
 
         saved_theme = self.data_manager.student_profile.get("theme", "cankaya")
@@ -199,6 +201,7 @@ class MainWindow(QMainWindow):
 
         # Combination Navigation Bar
         self.combination_bar = CombinationBar()
+        self.combination_bar.set_custom_status("Ders seçip sepete ekleyin")
         self.combination_bar.index_changed.connect(self.display_combination_by_index)
         self.combination_bar.preferences_changed.connect(self.on_preferences_changed)
         right_layout.addWidget(self.combination_bar)
@@ -278,25 +281,42 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Hata", f"Veriler güncellenirken sorun oluştu:\n{message}")
 
     def on_basket_courses_changed(self):
-        target_dict = self.search_panel.get_selected_target_dict()
-        if not target_dict:
+        if not self.search_panel.basket_courses:
+            AppLog.basket("Sepet boşaldı.")
+            self.has_generated_schedule = False
+            self.current_combinations = []
             self.timetable_widget.clear_schedule()
-            self.combination_bar.set_combinations_count(0)
+            self.combination_bar.set_custom_status("Ders seçip sepete ekleyin")
             return
 
-        all_manual_sections = []
-        for c_code, sec_list in target_dict.items():
-            all_manual_sections.extend(sec_list)
+        target_dict = self.search_panel.get_selected_target_dict()
+        if not target_dict:
+            AppLog.basket("Sepetteki hiçbir dersin şubesi seçili değil.")
+            self.current_combinations = []
+            self.timetable_widget.clear_schedule()
+            self.combination_bar.set_custom_status("Şube seçimi yapın")
+            return
 
-        self.timetable_widget.display_schedule(all_manual_sections)
+        AppLog.basket(f"Sepet güncellendi: {list(target_dict.keys())} (Toplam {sum(len(v) for v in target_dict.values())} şube)")
+        AppLog.schedule("Ders programı önizlemesi güncelleniyor...")
+        self.generate_schedule_combinations(silent=True)
 
     def on_custom_blocks_updated(self):
         """Called whenever the student adds, edits, or removes a custom schedule block."""
-        if self.current_combinations:
-            # Re-generate schedule combinations with the new custom blocks
-            self.generate_schedule_combinations(silent=True)
-        else:
-            self.on_basket_courses_changed()
+        AppLog.block("Kişisel etkinlikler güncellendi.")
+        if not self.search_panel.basket_courses:
+            self.timetable_widget.clear_schedule()
+            self.combination_bar.set_custom_status("Ders seçip sepete ekleyin")
+            return
+
+        target_dict = self.search_panel.get_selected_target_dict()
+        if not target_dict:
+            self.timetable_widget.clear_schedule()
+            self.combination_bar.set_custom_status("Şube seçimi yapın")
+            return
+
+        AppLog.schedule("Kişisel etkinlik değişikliği nedeniyle kombinasyonlar yeniden hesaplanıyor...")
+        self.generate_schedule_combinations(silent=True)
 
     def open_transcript_dialog(self):
         from gui.transcript_dialog import TranscriptDialog
@@ -312,21 +332,27 @@ class MainWindow(QMainWindow):
             self.raise_()
 
     def on_transcript_updated(self):
+        AppLog.data("Transkript verisi güncellendi.")
         self.search_panel.populate_departments()
         self.search_panel.on_search_changed()
         self.search_panel.update_basket_tree()
-        if self.current_combinations:
+        target_dict = self.search_panel.get_selected_target_dict()
+        if target_dict:
             self.generate_schedule_combinations(silent=True)
         else:
-            self.on_basket_courses_changed()
+            self.timetable_widget.clear_schedule()
 
     def generate_schedule_combinations(self, silent=False):
         try:
             target_dict = self.search_panel.get_selected_target_dict()
             if not target_dict:
+                AppLog.warning("Program oluşturulamadı: Sepette seçili ders veya şube yok.", tag="PROGRAM")
                 if not silent:
                     QMessageBox.warning(self, "Ders Seçilmedi", "Lütfen önce sol panelden alınmak istenen dersleri sepete ekleyin.")
                 return
+
+            if not silent:
+                self.has_generated_schedule = True
 
             # Check prerequisites for selected courses
             if not silent:
@@ -337,6 +363,7 @@ class MainWindow(QMainWindow):
                         missing_prereqs.append(f"• <b>{c_code}</b>: {p_info['message']}")
 
                 if missing_prereqs:
+                    AppLog.warning(f"Ön koşul eksikliği tespit edildi: {missing_prereqs}", tag="ÖN KOŞUL")
                     warning_text = (
                         "Sepetinizdeki bazı derslerin ön koşulları transkriptinizde eksik görünmektedir:\n\n" +
                         "\n".join(missing_prereqs) +
@@ -350,6 +377,7 @@ class MainWindow(QMainWindow):
                         QMessageBox.StandardButton.Yes
                     )
                     if res != QMessageBox.StandardButton.Yes:
+                        AppLog.info("Kullanıcı ön koşul uyarısı nedeniyle program oluşturmayı iptal etti.", tag="PROGRAM")
                         return
 
             prefs = {
@@ -359,6 +387,14 @@ class MainWindow(QMainWindow):
             }
 
             custom_blocks = self.data_manager.get_custom_schedule_blocks() if self.data_manager else {}
+            AppLog.schedule(f"Kombinasyon hesaplaması başladı. Dersler: {list(target_dict.keys())} | Tercihler: {prefs} | Etkinlik Sayısı: {len(custom_blocks)}")
+
+            # Save previous combination keys to preserve current view if possible
+            prev_keys = None
+            if self.current_combinations and 0 <= self.combination_bar.current_index < len(self.current_combinations):
+                prev_combo = self.current_combinations[self.combination_bar.current_index]
+                prev_keys = set((s.course_code, s.section_no) for s in prev_combo)
+
             self.current_combinations = self.scheduler_engine.generate_combinations(
                 target_dict, preferences=prefs, custom_blocks=custom_blocks
             )
@@ -366,31 +402,57 @@ class MainWindow(QMainWindow):
             self.combination_bar.set_combinations_count(count)
 
             if count > 0:
-                self.display_combination_by_index(0)
+                target_idx = 0
+                if prev_keys:
+                    for idx, combo in enumerate(self.current_combinations):
+                        if set((s.course_code, s.section_no) for s in combo) == prev_keys:
+                            target_idx = idx
+                            break
+                    else:
+                        for idx, combo in enumerate(self.current_combinations):
+                            combo_keys = set((s.course_code, s.section_no) for s in combo)
+                            if prev_keys.issubset(combo_keys):
+                                target_idx = idx
+                                break
+                AppLog.schedule(f"Toplam {count} adet çakışmasız kombinasyon bulundu. (Görüntülenen: {target_idx + 1}/{count})")
+                self.combination_bar.current_index = target_idx
+                self.combination_bar.update_controls()
+                self.display_combination_by_index(target_idx)
                 if not silent:
                     QMessageBox.information(self, "Kombinasyon Üretildi", f"Çakışma oluşturmayan toplam {count} adet ders programı kombinasyonu bulundu!")
             else:
-                self.timetable_widget.clear_schedule()
-                if not silent:
-                    # Check if custom blocks caused conflicts for any selected courses
-                    custom_block_clash_courses = []
-                    if custom_blocks:
-                        for c_code, sec_list in target_dict.items():
-                            if sec_list and all(self.scheduler_engine.section_overlaps_custom_blocks(s, custom_blocks)[0] for s in sec_list):
-                                custom_block_clash_courses.append(c_code)
+                AppLog.warning("Çakışmasız program kombinasyonu bulunamadı.", tag="PROGRAM")
+                self.combination_bar.set_combination_credits(0, 0, 0)
+                all_single_section = all(len(secs) == 1 for secs in target_dict.values())
+                if all_single_section and len(target_dict) > 0:
+                    all_manual_sections = [sec for sec_list in target_dict.values() for sec in sec_list]
+                    AppLog.schedule("Tekil şubeler seçili olduğu için çakışan slotlar tabloda gösteriliyor.")
+                    self.timetable_widget.display_schedule(all_manual_sections)
+                else:
+                    self.timetable_widget.clear_schedule()
 
-                    if custom_block_clash_courses:
-                        clash_info = ", ".join(custom_block_clash_courses)
-                        msg = (
-                            f"Seçtiğiniz derslerden bazılarının tüm şubeleri eklediğiniz kişisel etkinliklerle çakışmaktadır:\n\n"
-                            f"Çakışan dersler: {clash_info}\n\n"
-                            f"Lütfen tablodaki ilgili saatlerdeki kişisel etkinliğinizi düzenlemeyi/kaldırmayı veya farklı dersler seçmeyi deneyin."
-                        )
-                    else:
-                        msg = (
-                            "Seçtiğiniz dersler/section'lar veya kişisel etkinlikler arasında çakışma oluşturmayan bir kombinasyon bulunamadı.\n"
-                            "Lütfen farklı section'lar seçmeyi, kişisel etkinliklerinizi düzenlemeyi veya filtreleri esnetmeyi deneyin."
-                        )
+                # Check if custom blocks caused conflicts for any selected courses
+                custom_block_clash_courses = []
+                if custom_blocks:
+                    for c_code, sec_list in target_dict.items():
+                        if sec_list and all(self.scheduler_engine.section_overlaps_custom_blocks(s, custom_blocks)[0] for s in sec_list):
+                            custom_block_clash_courses.append(c_code)
+
+                if custom_block_clash_courses:
+                    clash_info = ", ".join(custom_block_clash_courses)
+                    AppLog.warning(f"Kişisel etkinlik çakışması olan dersler: {clash_info}", tag="ÇAKIŞMA")
+                    msg = (
+                        f"Seçtiğiniz derslerden bazılarının tüm şubeleri eklediğiniz kişisel etkinliklerle çakışmaktadır:\n\n"
+                        f"Çakışan dersler: {clash_info}\n\n"
+                        f"Lütfen tablodaki ilgili saatlerdeki kişisel etkinliğinizi düzenlemeyi/kaldırmayı veya farklı dersler seçmeyi deneyin."
+                    )
+                else:
+                    AppLog.warning("Dersler veya tercihler arasında çakışma mevcut.", tag="ÇAKIŞMA")
+                    msg = (
+                        "Seçtiğiniz dersler/section'lar veya kişisel etkinlikler arasında çakışma oluşturmayan bir kombinasyon bulunamadı.\n"
+                        "Lütfen farklı section'lar seçmeyi, kişisel etkinliklerinizi düzenlemeyi veya filtreleri esnetmeyi deneyin."
+                    )
+                if not silent:
                     QMessageBox.warning(self, "Çakışmasız Program Bulunamadı", msg)
         finally:
             self.activateWindow()
@@ -399,6 +461,7 @@ class MainWindow(QMainWindow):
     def on_preferences_changed(self, prefs):
         target_dict = self.search_panel.get_selected_target_dict()
         if target_dict:
+            AppLog.schedule(f"Filtre tercihi değişti: {prefs}")
             self.generate_schedule_combinations(silent=True)
 
     def display_combination_by_index(self, index):
@@ -417,6 +480,8 @@ class MainWindow(QMainWindow):
                     total_credit += cr
                     total_ects += ec
 
+            sec_summary = ", ".join(f"{s.course_code}(S{s.section_no})" for s in combo_sections)
+            AppLog.schedule(f"Kombinasyon {index + 1}/{len(self.current_combinations)} görüntülendi: [{sec_summary}] | {len(distinct_courses)} Ders | {total_credit} Kr / {total_ects} AKTS")
             self.combination_bar.set_combination_credits(len(distinct_courses), total_credit, total_ects)
         else:
             self.combination_bar.set_combination_credits(0, 0, 0)

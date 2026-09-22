@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply selection:bg-amber-400 selection:text-slate-950;
+  }
+}
+
+/* Custom modern scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-amber-300/60 dark:bg-amber-500/30 rounded-full hover:bg-amber-400/80 dark:hover:bg-amber-500/50 transition-colors;
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  @apply bg-white/95 dark:bg-darkbg-surface/95 backdrop-blur-md border border-slate-200/80 dark:border-darkbg-border shadow-sm;
+}
+
+.glass-card {
+  @apply bg-white dark:bg-darkbg-card backdrop-blur-sm border border-slate-200/80 dark:border-darkbg-border;
+}
+
+/* Timetable specific print/export styling */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

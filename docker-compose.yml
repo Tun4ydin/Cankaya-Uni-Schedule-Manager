@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: WEB/backend/Dockerfile
+    container_name: cankaya_schedule_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./WEB/frontend
+      dockerfile: Dockerfile
+    container_name: cankaya_schedule_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./WEB/frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped

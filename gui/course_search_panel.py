@@ -6,6 +6,7 @@ from gui.qt_compat import (
     QMenu, CUSTOM_CONTEXT_MENU, QDialog, QFrame, QColor
 )
 from gui.styles import ModernStyle, CankayaStyle, StyleManager
+from logger import AppLog
 
 # Try importing QCompleter
 try:
@@ -461,21 +462,25 @@ class CourseSearchPanel(QWidget):
                 break
 
     def add_selected_course_to_basket(self, item=None):
-        if item is None:
+        if item is None or isinstance(item, bool):
             item = self.list_results.currentItem()
         if not item:
+            AppLog.debug("Sepete eklenecek ders seçilmedi.", tag="SEPET")
             return
 
         c_code = item.data(USER_ROLE)
         if not c_code or c_code not in self.data_manager.courses:
+            AppLog.warning(f"Ders kodu geçersiz veya sistemde bulunamadı: {c_code}", tag="SEPET")
             return
 
         if c_code in self.basket_courses:
+            AppLog.basket(f"'{c_code}' zaten sepette ekli.")
             return
 
         # Prerequisite warning check
         prereq_info = self.data_manager.check_course_prerequisites(c_code)
         if not prereq_info.get("can_take", True):
+            AppLog.warning(f"'{c_code}' ön koşul eksik: {prereq_info['message']}", tag="ÖN KOŞUL")
             res = QMessageBox.warning(
                 self,
                 "Ön Koşul Uyarısı",
@@ -490,6 +495,7 @@ class CourseSearchPanel(QWidget):
                 self.window().activateWindow()
                 self.window().raise_()
             if res != QMessageBox.StandardButton.Yes:
+                AppLog.basket(f"'{c_code}' ön koşul uyarısı nedeniyle kullanıcı tarafından iptal edildi.")
                 return
 
         course = self.data_manager.courses[c_code]
@@ -499,6 +505,7 @@ class CourseSearchPanel(QWidget):
             "sections": set(all_sec_nos)
         }
 
+        AppLog.basket(f"'{c_code}' sepete eklendi. ({len(all_sec_nos)} açık şube: {sorted(all_sec_nos)})")
         self.update_basket_tree()
         self.courses_changed.emit()
 
@@ -512,6 +519,7 @@ class CourseSearchPanel(QWidget):
             c_code = c_code.split(":")[0]
             if c_code in self.basket_courses:
                 del self.basket_courses[c_code]
+                AppLog.basket(f"'{c_code}' sepetten çıkarıldı.")
                 self.update_basket_tree()
                 self.courses_changed.emit()
 
@@ -592,8 +600,10 @@ class CourseSearchPanel(QWidget):
                 if c_code in self.basket_courses:
                     if item.checkState(0) == CHECKED:
                         self.basket_courses[c_code]["sections"].add(sec_no)
+                        AppLog.basket(f"'{c_code}' Section {sec_no} seçildi.")
                     else:
                         self.basket_courses[c_code]["sections"].discard(sec_no)
+                        AppLog.basket(f"'{c_code}' Section {sec_no} seçimi kaldırıldı.")
 
                     parent = item.parent()
                     if parent:
@@ -614,10 +624,12 @@ class CourseSearchPanel(QWidget):
                         self.basket_courses[c_code]["sections"] = set(course.sections.keys())
                         for i in range(item.childCount()):
                             item.child(i).setCheckState(0, CHECKED)
+                        AppLog.basket(f"'{c_code}' tüm şubeleri ({len(course.sections)}) seçildi.")
                     elif item.checkState(0) == UNCHECKED:
                         self.basket_courses[c_code]["sections"].clear()
                         for i in range(item.childCount()):
                             item.child(i).setCheckState(0, UNCHECKED)
+                        AppLog.basket(f"'{c_code}' tüm şubelerinin seçimi kaldırıldı.")
         finally:
             self.tree_basket.blockSignals(False)
 
@@ -702,7 +714,7 @@ class CourseSearchPanel(QWidget):
 
     def open_selected_course_info(self, item=None):
         c_code = None
-        if item is None:
+        if item is None or isinstance(item, bool):
             item = self.list_results.currentItem()
         if item:
             c_code = item.data(USER_ROLE)

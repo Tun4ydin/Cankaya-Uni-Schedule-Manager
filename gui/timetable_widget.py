@@ -6,6 +6,7 @@ from gui.qt_compat import (
 from gui.styles import StyleManager, ModernStyle, CankayaStyle
 from gui.conflict_dialog import ConflictDetailDialog
 from gui.custom_block_dialog import CustomBlockEditDialog
+from logger import AppLog
 
 class TimetableWidget(QTableWidget):
     custom_blocks_changed = pyqtSignal()
@@ -88,6 +89,10 @@ class TimetableWidget(QTableWidget):
 
         return -1
 
+    def _notify_custom_blocks_changed(self):
+        """Notifies parent about custom block updates or refreshes local schedule."""
+        self.custom_blocks_changed.emit()
+
     def on_slot_clicked(self, day_name, time_slot, entries, custom_block=None):
         """Opens the detail/conflict dialog for the clicked timetable cell."""
         dialog = ConflictDetailDialog(
@@ -104,10 +109,7 @@ class TimetableWidget(QTableWidget):
                 self.window().raise_()
 
         if getattr(dialog, 'custom_block_modified', False):
-            QTimer.singleShot(0, lambda: (
-                self.display_schedule(self.last_sections_list),
-                self.custom_blocks_changed.emit()
-            ))
+            QTimer.singleShot(0, self._notify_custom_blocks_changed)
 
     def on_empty_cell_clicked(self, day_name, time_slot):
         """Opens the custom block edit dialog to add a new custom note/block."""
@@ -115,19 +117,19 @@ class TimetableWidget(QTableWidget):
         try:
             if dlg.exec():
                 if dlg.result_data and self.data_manager:
+                    title = dlg.result_data["title"]
                     if dlg.result_data.get("all_weekdays"):
                         for d in ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]:
                             self.data_manager.set_custom_schedule_block(
-                                d, time_slot, dlg.result_data["title"], dlg.result_data.get("note", ""), dlg.result_data.get("color", "amber")
+                                d, time_slot, title, dlg.result_data.get("note", ""), dlg.result_data.get("color", "amber")
                             )
+                        AppLog.block(f"Hafta içi tüm günlere etkinlik eklendi: {time_slot} -> '{title}'")
                     else:
                         self.data_manager.set_custom_schedule_block(
-                            day_name, time_slot, dlg.result_data["title"], dlg.result_data.get("note", ""), dlg.result_data.get("color", "amber")
+                            day_name, time_slot, title, dlg.result_data.get("note", ""), dlg.result_data.get("color", "amber")
                         )
-                    QTimer.singleShot(0, lambda: (
-                        self.display_schedule(self.last_sections_list),
-                        self.custom_blocks_changed.emit()
-                    ))
+                        AppLog.block(f"Etkinlik eklendi: {day_name} {time_slot} -> '{title}'")
+                    QTimer.singleShot(0, self._notify_custom_blocks_changed)
         finally:
             if self.window():
                 self.window().activateWindow()
@@ -140,24 +142,22 @@ class TimetableWidget(QTableWidget):
             if dlg.exec():
                 if getattr(dlg, 'deleted', False) and self.data_manager:
                     self.data_manager.delete_custom_schedule_block(day_name, time_slot)
-                    QTimer.singleShot(0, lambda: (
-                        self.display_schedule(self.last_sections_list),
-                        self.custom_blocks_changed.emit()
-                    ))
+                    AppLog.block(f"Etkinlik silindi: {day_name} {time_slot} ('{current_block.get('title', '')}')")
+                    QTimer.singleShot(0, self._notify_custom_blocks_changed)
                 elif dlg.result_data and self.data_manager:
+                    title = dlg.result_data["title"]
                     if dlg.result_data.get("all_weekdays"):
                         for d in ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]:
                             self.data_manager.set_custom_schedule_block(
-                                d, time_slot, dlg.result_data["title"], dlg.result_data.get("note", ""), dlg.result_data.get("color", "amber")
+                                d, time_slot, title, dlg.result_data.get("note", ""), dlg.result_data.get("color", "amber")
                             )
+                        AppLog.block(f"Hafta içi tüm günler etkinliği güncellendi: {time_slot} -> '{title}'")
                     else:
                         self.data_manager.set_custom_schedule_block(
-                            day_name, time_slot, dlg.result_data["title"], dlg.result_data.get("note", ""), dlg.result_data.get("color", "amber")
+                            day_name, time_slot, title, dlg.result_data.get("note", ""), dlg.result_data.get("color", "amber")
                         )
-                    QTimer.singleShot(0, lambda: (
-                        self.display_schedule(self.last_sections_list),
-                        self.custom_blocks_changed.emit()
-                    ))
+                        AppLog.block(f"Etkinlik güncellendi: {day_name} {time_slot} -> '{title}'")
+                    QTimer.singleShot(0, self._notify_custom_blocks_changed)
         finally:
             if self.window():
                 self.window().activateWindow()

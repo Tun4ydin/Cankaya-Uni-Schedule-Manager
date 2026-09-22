@@ -42,7 +42,12 @@ class Section:
             "course_code": self.course_code,
             "section_no": self.section_no,
             "instructor": self.instructor,
-            "slots": [s.to_dict() for s in self.slots]
+            "slots": [
+                {
+                    **s.to_dict(),
+                    "classroom": s.classroom or self.classroom or ""
+                } for s in self.slots
+            ]
         }
         if self.classroom:
             d["classroom"] = self.classroom
@@ -821,6 +826,18 @@ class DataManager:
 
     def process_raw_entries(self, raw_entries):
         """Builds structured Course & Section objects from raw scraped entries."""
+        # Preserve any existing classroom assignments
+        existing_classrooms = {}
+        for c_code, course in self.courses.items():
+            norm_c = self.normalize_code(c_code)
+            for sec_no, sec in course.sections.items():
+                s_str = str(sec_no)
+                if sec.classroom:
+                    existing_classrooms[(norm_c, s_str)] = sec.classroom
+                for slot in sec.slots:
+                    if slot.classroom:
+                        existing_classrooms[(norm_c, s_str, slot.day, slot.time_slot)] = slot.classroom
+
         self.courses.clear()
         self.departments.clear()
 
@@ -836,6 +853,11 @@ class DataManager:
             if not c_code or not day or not t_slot:
                 continue
 
+            norm_c = self.normalize_code(c_code)
+            s_str = str(sec_no)
+            if not classroom:
+                classroom = existing_classrooms.get((norm_c, s_str, day, t_slot), existing_classrooms.get((norm_c, s_str), ""))
+
             if c_code not in self.courses:
                 self.courses[c_code] = Course(c_code, dept)
             
@@ -847,6 +869,41 @@ class DataManager:
             section.add_slot(day, t_slot, classroom)
 
         self.save_to_cache()
+
+    def enrich_classrooms_from_scraper(self, classroom_entries):
+        """Enriches existing in-memory courses with parsed classroom entries and saves to cache."""
+        slot_lookup = {}
+        sec_lookup = {}
+        for ce in classroom_entries:
+            c = self.normalize_code(ce["course_code"])
+            s = str(ce["section"])
+            d = ce["day"]
+            t = ce["time_slot"]
+            room = ce.get("classroom", "").strip()
+            if room:
+                slot_lookup[(c, s, d, t)] = room
+                if (c, s) not in sec_lookup:
+                    sec_lookup[(c, s)] = room
+
+        matched = 0
+        for c_code, course in self.courses.items():
+            norm_c = self.normalize_code(c_code)
+            for sec_no, sec in course.sections.items():
+                s_str = str(sec_no)
+                sec_room = sec_lookup.get((norm_c, s_str), "")
+                if sec_room and not sec.classroom:
+                    sec.classroom = sec_room
+                for slot in sec.slots:
+                    slot_room = slot_lookup.get((norm_c, s_str, slot.day, slot.time_slot), sec_room)
+                    if slot_room:
+                        slot.classroom = slot_room
+                        matched += 1
+                        if not sec.classroom:
+                            sec.classroom = slot_room
+
+        self.save_to_cache()
+        print(f"Enriched {matched} course slots with classrooms.")
+        return matched
 
     def save_to_cache(self):
         data = {
