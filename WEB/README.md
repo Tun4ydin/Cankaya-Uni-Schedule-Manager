@@ -1,10 +1,10 @@
-# 🎓 Çankaya Üniversitesi Ders Programı Yöneticisi (Web Versiyonu)
+#  Çankaya Üniversitesi Ders Programı Yöneticisi (Web Versiyonu)
 
 Bu proje, masaüstü PySide6 uygulamasının modern **React 18 + Vite + Tailwind CSS** frontend ve **FastAPI** backend mimarisine dönüştürülmüş halidir.
 
 ---
 
-## 🚀 Mimari ve Teknolojiler
+##  Mimari ve Teknolojiler
 
 - **Frontend (`WEB/frontend`)**:
   - **React 18** (React 18.3.1)
@@ -19,9 +19,9 @@ Bu proje, masaüstü PySide6 uygulamasının modern **React 18 + Vite + Tailwind
 
 ---
 
-## 📦 Kurulum ve Çalıştırma
+##  Kurulum ve Çalıştırma
 
-### 🐳 Yöntem 1: Docker Compose (Tek Komut - Önerilen)
+### Docker Compose
 
 Her seferinde 2 ayrı terminal açmak yerine tek bir komutla hem backend hem frontend'i ayağa kaldırabilirsiniz:
 
@@ -36,43 +36,25 @@ docker compose up --build
 
 ---
 
-### 💻 Yöntem 2: Manuel Çalıştırma (2 Ayrı Terminal)
+##  Özellikler
 
-#### 1. Backend'i Başlatma (Terminal 1)
-```bash
-cd WEB/backend
-python3 -m uvicorn main:app --reload --port 8000
-```
-
-#### 2. Frontend'i Başlatma (Terminal 2)
-```bash
-cd WEB/frontend
-npm run dev
-```
-
----
-
-## ✨ Özellikler
-
-1. **⚡ Gerçek Zamanlı Ders Arama & Filtreleme**:
+1. **Gerçek Zamanlı Ders Arama & Filtreleme**:
    - 580+ ders arasında anında arama (ders kodu, ders adı, hoca adı).
    - Bölüm bazlı filtreleme (CENG, SENG, EE, IE, ME, MECE, vb.).
    - Ders türü filtreleri: `📌 Zorunlu`, `🟣 ÇAP Zorunlu`, `🔵 Yandal Zorunlu`, `🔹 Seçmeli`.
-2. **🔄 Çakışmasız Program Kombinasyonları**:
+2. **Çakışmasız Program Kombinasyonları**:
    - Sepete eklenen derslerin tüm şubelerini tarayarak haftalık çakışmasız alternatif programları üretir.
    - Tercih filtreleri: `Cuma Boş`, `Pazartesi Boş`, `Sabah Dersi Yok (<10:00)`.
    - İstenilen ders için belirli bir şubeyi kilitleme veya otomatik seçimde bırakma.
-3. **📅 İnteraktif Haftalık Takvim**:
+3. **İnteraktif Haftalık Takvim**:
    - Pazartesi - Cumartesi arası 08:40 - 20:50 saat dilimleri.
    - Her ders için özel ayırt edici renk kartı, hoca adı ve derslik bilgisi (örn. `LA-01`, `B-102`).
-   - Boş kutulara tıklayarak `🍔 Yemek Arası`, `☕ Mola`, `📚 Ders Çalışma`, `🏋️ Spor` gibi özel etkinlik blokları ekleme/düzenleme.
-4. **📖 Ders Detayları & İzlence**:
+   - Boş kutulara tıklayarak `Yemek Arası`, `Mola`, `Ders Çalışma`, `Spor` gibi özel etkinlik blokları ekleme/düzenleme.
+4. **Ders Detayları & İzlence**:
    - Takvimdeki veya aramadaki bir derse tıklandığında dersin kredisi, AKTS'si, tanımı, ön koşul kontrolü ve resmi Çankaya bağlantıları.
-5. **📄 Transkript Yükleme & Müfredat Takibi**:
+5. **Transkript Yükleme & Müfredat Takibi**:
    - PDF transkript yükleme veya metin yapıştırma desteği.
    - Öğrenci numarası, ana bölüm, yandal/ÇAP tespiti ve geçilen derslerin harf notlarıyla birlikte taranması.
    - Zorunlu, teknik seçmeli ve sosyal seçmeli ders tamamlama yüzdesi ve kalan zorunlu dersler listesi.
-6. **💾 Dışa Aktarma**:
+6. **Dışa Aktarma**:
    - Oluşturulan haftalık programı yüksek çözünürlüklü PNG görseli veya JSON olarak bilgisayara indirme.
-7. **🌙 Çift Tema**:
-   - Çankaya Üniversitesi açık kurumsal teması ve göz yormayan karanlık tema.
